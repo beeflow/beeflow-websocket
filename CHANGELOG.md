@@ -20,3 +20,5 @@ This project follows Semantic Versioning.
 ### Changed
 
 - Kept framework dependencies behind optional extras so core-only installs do not require Django, Channels, FastAPI, or Flask.
+- Documented which runtime packages are included in each install target and which deployment-specific packages users
+  should add themselves.

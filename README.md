@@ -44,6 +44,18 @@ Flask projects can install the matching optional runtime extra:
 uv add "beeflow-websocket[flask]"
 ```
 
+## Runtime Dependencies
+
+Each install target keeps only the dependencies needed by that adapter. Deployment servers, channel backends,
+external pub/sub, and application-level auth remain the responsibility of the application using the package.
+
+| Install target | Installed by this package | Not installed | Add when needed |
+| --- | --- | --- | --- |
+| `beeflow-websocket` | `pydantic` | Django, Channels, FastAPI, Flask, WebSocket servers | Add a framework extra when the project uses a supported adapter. |
+| `beeflow-websocket[django]` | `django`, `channels` | `daphne`, `channels-redis`, Redis server | Add `daphne` when serving Django Channels with Daphne. Add `channels-redis` and Redis when using a Redis channel layer for groups, multi-process workers, or cross-instance delivery. |
+| `beeflow-websocket[fastapi]` | `fastapi` | ASGI servers such as `uvicorn` or `hypercorn`, external pub/sub, connection managers | Add an ASGI server if the application does not already provide one. Add Redis or another pub/sub layer only when broadcasting across connections, workers, or instances. |
+| `beeflow-websocket[flask]` | `flask`, `flask-sock` | Production servers such as `gunicorn`, external pub/sub, connection managers | Add the production server used by the application deployment. Add Redis or another pub/sub layer only when broadcasting across connections, workers, or instances. |
+
 Local development from this repository:
 
 ```bash

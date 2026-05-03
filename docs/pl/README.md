@@ -76,6 +76,17 @@ zewnętrzny pub/sub powinien być osobnym managerem połączeń.
 Moduły w `core` nie importują Django, Channels, FastAPI ani Flask. Kod domenowy powinien importować kontrakty i rejestry z `beeflow_websocket.core`.
 Kolejne adaptery powinny leżeć obok `django`, bez importowania kodu frameworków do `core`.
 
+## Zależności Runtime
+
+Paczka trzyma integracje frameworków jako opcjonalne zależności:
+
+| Instalacja | Instalowane przez tę paczkę | Nie jest instalowane | Kiedy doinstalować |
+| --- | --- | --- | --- |
+| `beeflow-websocket` | `pydantic` | Django, Channels, FastAPI, Flask, serwery WebSocket | Dodaj extra dla frameworka, jeśli projekt używa wspieranego adaptera. |
+| `beeflow-websocket[django]` | `django`, `channels` | `daphne`, `channels-redis`, serwer Redis | Dodaj `daphne`, jeśli aplikacja ma obsługiwać Django Channels przez Daphne. Dodaj `channels-redis` i Redis, jeśli używasz Redis channel layer dla grup, wielu procesów workerów albo komunikacji między instancjami. |
+| `beeflow-websocket[fastapi]` | `fastapi` | serwery ASGI, np. `uvicorn` albo `hypercorn`, zewnętrzny pub/sub, managery połączeń | Dodaj serwer ASGI, jeśli aplikacja jeszcze go nie zapewnia. Dodaj Redis albo inną warstwę pub/sub tylko wtedy, gdy broadcast ma działać między połączeniami, workerami albo instancjami. |
+| `beeflow-websocket[flask]` | `flask`, `flask-sock` | serwery produkcyjne, np. `gunicorn`, zewnętrzny pub/sub, managery połączeń | Dodaj serwer produkcyjny używany przez deployment aplikacji. Dodaj Redis albo inną warstwę pub/sub tylko wtedy, gdy broadcast ma działać między połączeniami, workerami albo instancjami. |
+
 ## Kontrakt Wejściowy
 
 Każda wiadomość przychodząca od klienta ma kształt:
