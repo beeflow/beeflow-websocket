@@ -6,6 +6,11 @@ from pydantic import ValidationError
 
 from beeflow_websocket.core.action_registry import ActionContext, ActionPluginProtocol, ActionRegistryMeta
 from beeflow_websocket.core.actions.health import Health
+from beeflow_websocket.core.autodiscover import (
+    autodiscover_available_websocket_plugins,
+    autodiscover_websocket_plugins,
+    normalize_autodiscover_packages,
+)
 from beeflow_websocket.core.event_registry import EventPluginProtocol, EventRegistryMeta
 from beeflow_websocket.core.events.health import HealthEvent
 from beeflow_websocket.core.payloads import (
@@ -145,6 +150,60 @@ class RegistryMetaTests(TestCase):
     def test_builtin_recipients_are_registered_as_classes(self) -> None:
         """Recipient registry resolves built-in recipient handlers through the recipient class registry."""
         self.assertEqual(RecipientRegistryMeta.REGISTRY["websocket"], WebSocketRecipient)
+
+
+class AutodiscoverTests(TestCase):
+    """Verify configured plugin packages are imported for registry metaclasses."""
+
+    def test_autodiscover_imports_configured_package_tree(self) -> None:
+        """Autodiscovery imports configured packages and nested modules recursively."""
+        imported_modules = autodiscover_websocket_plugins(("tests.fixtures.autodiscover_plugins.core",))
+
+        self.assertIn("tests.fixtures.autodiscover_plugins.core", imported_modules)
+        self.assertIn("tests.fixtures.autodiscover_plugins.core.actions", imported_modules)
+        self.assertIn("tests.fixtures.autodiscover_plugins.core.nested.events", imported_modules)
+        self.assertIn("tests.fixtures.autodiscover_plugins.core.nested.recipients", imported_modules)
+        self.assertEqual(
+            ActionRegistryMeta.REGISTRY["core_autodiscovered_action"].__name__,
+            "CoreAutodiscoveredAction",
+        )
+        self.assertEqual(
+            EventRegistryMeta.REGISTRY["core_autodiscovered_event"].__name__,
+            "CoreAutodiscoveredEvent",
+        )
+        self.assertEqual(
+            RecipientRegistryMeta.REGISTRY["core_autodiscovered_recipient"].__name__,
+            "CoreAutodiscoveredRecipient",
+        )
+
+    def test_autodiscover_accepts_empty_configuration(self) -> None:
+        """Autodiscovery without configured packages is a no-op."""
+        self.assertEqual(autodiscover_websocket_plugins(None), ())
+        self.assertEqual(autodiscover_websocket_plugins(()), ())
+
+    def test_available_autodiscover_skips_missing_optional_packages(self) -> None:
+        """Available-package autodiscovery ignores absent conventional module names."""
+        self.assertEqual(
+            autodiscover_available_websocket_plugins(("tests.fixtures.autodiscover_plugins.missing_core",)),
+            (),
+        )
+
+    def test_available_autodiscover_raises_parent_package_import_errors(self) -> None:
+        """Available-package autodiscovery does not hide real parent package import failures."""
+        with self.assertRaises(ModuleNotFoundError) as context:
+            autodiscover_available_websocket_plugins(("tests.fixtures.broken_autodiscover_app.ws.actions",))
+
+        self.assertEqual(context.exception.name, "tests.fixtures.missing_dependency")
+
+    def test_autodiscover_rejects_string_configuration(self) -> None:
+        """Package configuration must be an iterable of strings, not one string."""
+        with self.assertRaises(TypeError):
+            normalize_autodiscover_packages("tests.fixtures", setting_name="TEST_SETTING")
+
+    def test_autodiscover_rejects_blank_package_names(self) -> None:
+        """Package configuration must contain concrete package names."""
+        with self.assertRaises(ValueError):
+            normalize_autodiscover_packages((" ",), setting_name="TEST_SETTING")
 
 
 class ErrorPayloadTests(TestCase):

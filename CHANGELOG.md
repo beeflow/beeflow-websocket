@@ -13,6 +13,7 @@ This project follows Semantic Versioning.
 - Optional FastAPI adapter with application-level configuration, WebSocket endpoint handler, and event emitter.
 - Optional Flask adapter based on Flask-Sock with application-level configuration, WebSocket endpoint handler, and event emitter.
 - Configurable Problem Details type base URL for framework adapters, with `about:blank` used when no application URL is configured.
+- Recursive plugin autodiscovery for user-defined actions, events, and recipients in Django, FastAPI, and Flask.
 - Separate core, Django, FastAPI, and Flask test and mypy Makefile targets.
 - GitHub Actions workflow that builds, verifies, and publishes distributions to PyPI on pushes to `master`.
 - Pull request CI workflow with required pre-commit, test, mypy, and build checks for `master` branch protection.

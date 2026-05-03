@@ -11,6 +11,7 @@ from beeflow_websocket.core.event_registry import EventRegistryMeta
 from beeflow_websocket.core.events.health import HealthEvent
 from beeflow_websocket.core.payloads import WebSocketActionPayload, WebSocketEventPayload
 from beeflow_websocket.core.recipient_registry import RecipientMapDoesNotExist
+from beeflow_websocket.django.apps import BeeflowWebsocketDjangoConfig
 from beeflow_websocket.django.consumer import WebSocketConsumer
 from beeflow_websocket.django.emitters import WebSocketChannelLayerProtocol, WebSocketEventEmitter
 from beeflow_websocket.django.routing import websocket_urlpatterns
@@ -155,6 +156,55 @@ class BeeflowWebsocketArchitectureTests(SimpleTestCase):
 
         self.assertEqual(django_consumer.WebSocketConsumer, WebSocketConsumer)
         self.assertEqual(django_routing.websocket_urlpatterns, websocket_urlpatterns)
+
+    @override_settings(
+        BEEFLOW_WEBSOCKET_AUTODISCOVER=True,
+        BEEFLOW_WEBSOCKET_AUTODISCOVER_PACKAGES=("tests.fixtures.autodiscover_plugins.django",),
+    )
+    def test_django_app_config_ready_autodiscovers_configured_plugins(self) -> None:
+        """Django AppConfig imports configured user plugin packages on startup."""
+        config = BeeflowWebsocketDjangoConfig(
+            "beeflow_websocket.django",
+            import_module("beeflow_websocket.django"),
+        )
+
+        config.ready()
+
+        self.assertEqual(
+            ActionRegistryMeta.REGISTRY["django_autodiscovered_action"].__name__,
+            "DjangoAutodiscoveredAction",
+        )
+
+    @override_settings(
+        INSTALLED_APPS=[
+            "channels",
+            "beeflow_websocket.django",
+            "tests.fixtures.django_autodiscover_app",
+        ],
+    )
+    def test_django_app_config_ready_autodiscovers_installed_app_plugins(self) -> None:
+        """Django AppConfig imports conventional plugin modules from installed apps."""
+        config = BeeflowWebsocketDjangoConfig(
+            "beeflow_websocket.django",
+            import_module("beeflow_websocket.django"),
+        )
+
+        config.ready()
+
+        self.assertEqual(
+            ActionRegistryMeta.REGISTRY["installed_django_autodiscovered_action"].__name__,
+            "InstalledDjangoAutodiscoveredAction",
+        )
+
+    @override_settings(
+        BEEFLOW_WEBSOCKET_AUTODISCOVER=False,
+        BEEFLOW_WEBSOCKET_AUTODISCOVER_PACKAGES=("tests.fixtures.autodiscover_plugins.missing_django",),
+    )
+    def test_django_autodiscover_can_be_disabled(self) -> None:
+        """Django autodiscovery can be disabled even when packages are configured."""
+        django_autodiscover = import_module("beeflow_websocket.django.autodiscover")
+
+        self.assertEqual(django_autodiscover.autodiscover_websocket_plugins(), ())
 
 
 class BeeflowWebsocketDjangoProtocolTests(SimpleTestCase):

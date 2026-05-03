@@ -76,6 +76,37 @@ zewnętrzny pub/sub powinien być osobnym managerem połączeń.
 Moduły w `core` nie importują Django, Channels, FastAPI ani Flask. Kod domenowy powinien importować kontrakty i rejestry z `beeflow_websocket.core`.
 Kolejne adaptery powinny leżeć obok `django`, bez importowania kodu frameworków do `core`.
 
+## Autodiscover Pluginów
+
+Klasy akcji, zdarzeń i odbiorców rejestrują się w momencie importu modułu. Autodiscover importuje moduły pluginów z
+aplikacji użytkownika podczas startu aplikacji, żeby mogły wykonać się metaklasy rejestrujące.
+
+Autodiscover jest domyślnie włączony. Django przechodzi po każdej zainstalowanej aplikacji Django. FastAPI i Flask
+sprawdzają pakiet, który wywołał `configure_beeflow_websocket`, oraz jego pakiety nadrzędne. Każdy adapter importuje te
+konwencyjne moduły pluginów, gdy istnieją:
+
+```text
+my_app/actions.py
+my_app/events.py
+my_app/recipients.py
+my_app/ws/actions.py
+my_app/ws/events.py
+my_app/ws/recipients.py
+```
+
+Brakujące moduły są pomijane. Błędy importu wewnątrz istniejących modułów nie są ukrywane.
+
+Dla tego konwencyjnego układu FastAPI i Flask nie potrzebują konfiguracji autodiscover:
+
+```python
+configure_beeflow_websocket(
+    app,
+)
+```
+
+Ustaw `BEEFLOW_WEBSOCKET_AUTODISCOVER = False` w Django albo `autodiscover=False` w FastAPI i Flask, żeby wyłączyć
+importy podczas startu.
+
 ## Zależności Runtime
 
 Paczka trzyma integracje frameworków jako opcjonalne zależności:

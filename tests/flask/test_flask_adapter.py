@@ -121,6 +121,41 @@ def test_flask_adapter_exposes_websocket_transport() -> None:
     assert flask_emitters.FlaskWebSocketEventEmitter is FlaskWebSocketEventEmitter
 
 
+def test_flask_configure_autodiscovers_configured_plugins() -> None:
+    """Flask configuration imports configured user plugin packages."""
+    app = Flask(__name__)
+
+    configure_beeflow_websocket(
+        app,
+        autodiscover_packages=("tests.fixtures.autodiscover_plugins.flask",),
+    )
+
+    assert ActionRegistryMeta.REGISTRY["flask_autodiscovered_action"].__name__ == "FlaskAutodiscoveredAction"
+
+
+def test_flask_configure_autodiscovers_conventional_plugin_modules() -> None:
+    """Flask configuration imports conventional plugin modules from the application package."""
+    fixture_app = import_module("tests.fixtures.flask_autodiscover_app")
+
+    fixture_app.create_app()
+
+    assert (
+        ActionRegistryMeta.REGISTRY["installed_flask_autodiscovered_action"].__name__
+        == "InstalledFlaskAutodiscoveredAction"
+    )
+
+
+def test_flask_configure_can_disable_autodiscover() -> None:
+    """Flask autodiscovery can be disabled even when packages are configured."""
+    app = Flask(__name__)
+
+    configure_beeflow_websocket(
+        app,
+        autodiscover=False,
+        autodiscover_packages=("tests.fixtures.autodiscover_plugins.missing_flask",),
+    )
+
+
 def test_flask_endpoint_dispatches_registered_health_action() -> None:
     """Flask endpoint dispatches an action and sends the yielded event payload."""
     app = create_test_app()

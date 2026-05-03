@@ -1,0 +1,1 @@
+"""Flask autodiscover fixture package."""

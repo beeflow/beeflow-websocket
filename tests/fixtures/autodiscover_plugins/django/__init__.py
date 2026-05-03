@@ -1,0 +1,1 @@
+"""Django autodiscover fixture package."""
