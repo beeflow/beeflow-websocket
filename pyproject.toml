@@ -1,6 +1,6 @@
 [project]
 name = "beeflow-websocket"
-version = "0.1.0"
+version = "0.1.1"
 description = "Typed WebSocket action and event dispatch with optional framework adapters."
 readme = "README.md"
 authors = [
