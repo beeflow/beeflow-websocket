@@ -1,0 +1,1 @@
+"""Core autodiscover fixture package."""

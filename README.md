@@ -124,6 +124,39 @@ class Health(metaclass=ActionRegistryMeta, name="health"):
         )
 ```
 
+## Plugin Autodiscover
+
+Action, event, and recipient classes are registered when their modules are imported. Autodiscovery imports
+application-owned plugin modules during startup so their registry metaclasses can run.
+
+Autodiscovery is enabled by default. Django scans every installed Django app. FastAPI and Flask scan the package that
+called `configure_beeflow_websocket` and its parent packages. Each adapter imports these conventional plugin modules
+when they exist:
+
+```text
+my_app/actions.py
+my_app/events.py
+my_app/recipients.py
+my_app/ws/actions.py
+my_app/ws/events.py
+my_app/ws/recipients.py
+```
+
+Missing modules are ignored. Import errors inside existing modules are not hidden; a broken plugin module should fail
+application startup.
+
+FastAPI and Flask do not need autodiscovery configuration for this conventional layout:
+
+```python
+configure_beeflow_websocket(
+    app,
+    problem_type_base_url="https://example.com/problems/websocket",
+)
+```
+
+Set `BEEFLOW_WEBSOCKET_AUTODISCOVER = False` in Django or `autodiscover=False` in FastAPI and Flask to disable startup
+imports.
+
 ## Django Channels Setup
 
 Add the package to Django settings when using the adapter:
@@ -174,7 +207,10 @@ from fastapi import FastAPI, WebSocket
 from beeflow_websocket.fastapi import configure_beeflow_websocket, handle_beeflow_websocket
 
 app = FastAPI()
-configure_beeflow_websocket(app, problem_type_base_url="https://example.com/problems/websocket")
+configure_beeflow_websocket(
+    app,
+    problem_type_base_url="https://example.com/problems/websocket",
+)
 
 
 @app.websocket("/ws/")
@@ -204,7 +240,10 @@ from beeflow_websocket.flask import configure_beeflow_websocket, handle_beeflow_
 
 app = Flask(__name__)
 sock = Sock(app)
-configure_beeflow_websocket(app, problem_type_base_url="https://example.com/problems/websocket")
+configure_beeflow_websocket(
+    app,
+    problem_type_base_url="https://example.com/problems/websocket",
+)
 
 
 @sock.route("/ws/")

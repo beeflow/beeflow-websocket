@@ -76,6 +76,37 @@ pub/sub belongs in a separate connection manager.
 Modules in `core` do not import Django, Channels, FastAPI, or Flask. Domain code should import contracts and registries from `beeflow_websocket.core`.
 Future adapters should live beside `django` instead of importing framework code into `core`.
 
+## Plugin Autodiscover
+
+Action, event, and recipient classes are registered when their modules are imported. Autodiscovery imports user plugin
+modules during application startup so their registry metaclasses can run.
+
+Autodiscovery is enabled by default. Django scans every installed Django app. FastAPI and Flask scan the package that
+called `configure_beeflow_websocket` and its parent packages. Each adapter imports these conventional plugin modules
+when they exist:
+
+```text
+my_app/actions.py
+my_app/events.py
+my_app/recipients.py
+my_app/ws/actions.py
+my_app/ws/events.py
+my_app/ws/recipients.py
+```
+
+Missing modules are ignored. Import errors inside existing modules are not hidden.
+
+FastAPI and Flask do not need autodiscovery configuration for this conventional layout:
+
+```python
+configure_beeflow_websocket(
+    app,
+)
+```
+
+Set `BEEFLOW_WEBSOCKET_AUTODISCOVER = False` in Django or `autodiscover=False` in FastAPI and Flask to disable startup
+imports.
+
 ## Runtime Dependencies
 
 The package keeps framework integrations optional:

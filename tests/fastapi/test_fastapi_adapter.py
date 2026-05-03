@@ -116,6 +116,41 @@ def test_fastapi_adapter_exposes_websocket_transport() -> None:
     assert fastapi_emitters.FastAPIWebSocketEventEmitter is FastAPIWebSocketEventEmitter
 
 
+def test_fastapi_configure_autodiscovers_configured_plugins() -> None:
+    """FastAPI configuration imports configured user plugin packages."""
+    app = FastAPI()
+
+    configure_beeflow_websocket(
+        app,
+        autodiscover_packages=("tests.fixtures.autodiscover_plugins.fastapi",),
+    )
+
+    assert ActionRegistryMeta.REGISTRY["fastapi_autodiscovered_action"].__name__ == "FastAPIAutodiscoveredAction"
+
+
+def test_fastapi_configure_autodiscovers_conventional_plugin_modules() -> None:
+    """FastAPI configuration imports conventional plugin modules from the application package."""
+    fixture_app = import_module("tests.fixtures.fastapi_autodiscover_app")
+
+    fixture_app.create_app()
+
+    assert (
+        ActionRegistryMeta.REGISTRY["installed_fastapi_autodiscovered_action"].__name__
+        == "InstalledFastAPIAutodiscoveredAction"
+    )
+
+
+def test_fastapi_configure_can_disable_autodiscover() -> None:
+    """FastAPI autodiscovery can be disabled even when packages are configured."""
+    app = FastAPI()
+
+    configure_beeflow_websocket(
+        app,
+        autodiscover=False,
+        autodiscover_packages=("tests.fixtures.autodiscover_plugins.missing_fastapi",),
+    )
+
+
 def test_fastapi_endpoint_dispatches_registered_health_action() -> None:
     """FastAPI endpoint dispatches an action and sends the yielded event payload."""
     client = TestClient(create_test_app())
