@@ -1,4 +1,3 @@
-from collections.abc import AsyncIterator
 from pathlib import Path
 from unittest import IsolatedAsyncioTestCase, TestCase
 from uuid import UUID
@@ -15,13 +14,14 @@ from beeflow_websocket.core.payloads import (
     WebSocketEventPayload,
     WebSocketRequestIdentifier,
 )
+from beeflow_websocket.core.problems import DEFAULT_PROBLEM_TYPE, build_problem_type
 from beeflow_websocket.core.recipient_registry import RecipientPluginProtocol, RecipientRegistryMeta
 from beeflow_websocket.core.recipients.websocket import WebSocketRecipient
 
 CLIENT_MESSAGE_ID = UUID("11111111-1111-4111-8111-111111111111")
 REQUEST_ID = UUID("22222222-2222-4222-8222-222222222222")
 SERVER_MESSAGE_ID = UUID("33333333-3333-4333-8333-333333333333")
-FRAMEWORK_MARKERS = ("django", "channels", "fastapi")
+FRAMEWORK_MARKERS = ("django", "channels", "fastapi", "flask")
 
 
 class BeeflowWebsocketCoreArchitectureTests(TestCase):
@@ -155,7 +155,7 @@ class ErrorPayloadTests(TestCase):
         payload = ErrorPayload(
             msg_id=SERVER_MESSAGE_ID,
             req_id=REQUEST_ID,
-            type="https://beeflow.co.uk/problems/beeflow-websocket/unknown-action",
+            type="https://example.com/problems/websocket/unknown-action",
             title="Unknown WebSocket action",
             status=400,
             detail="The requested WebSocket action is not registered.",
@@ -169,7 +169,7 @@ class ErrorPayloadTests(TestCase):
             {
                 "msg_id": str(SERVER_MESSAGE_ID),
                 "req_id": str(REQUEST_ID),
-                "type": "https://beeflow.co.uk/problems/beeflow-websocket/unknown-action",
+                "type": "https://example.com/problems/websocket/unknown-action",
                 "title": "Unknown WebSocket action",
                 "status": 400,
                 "detail": "The requested WebSocket action is not registered.",
@@ -214,6 +214,18 @@ class ErrorPayloadTests(TestCase):
                 status=400,
                 detail="The request cannot be processed.",
             )
+
+    def test_problem_type_uses_configured_base_url(self) -> None:
+        """Problem Details type URI is built from the application-owned base URL."""
+        self.assertEqual(
+            build_problem_type("https://example.com/problems/websocket/", "unknown-action"),
+            "https://example.com/problems/websocket/unknown-action",
+        )
+
+    def test_problem_type_defaults_to_about_blank_without_base_url(self) -> None:
+        """Problem Details type URI never falls back to a package vendor URL."""
+        self.assertEqual(build_problem_type(None, "unknown-action"), DEFAULT_PROBLEM_TYPE)
+        self.assertEqual(build_problem_type(" ", "unknown-action"), DEFAULT_PROBLEM_TYPE)
 
 
 class ActionContextTests(TestCase):

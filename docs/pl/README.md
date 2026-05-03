@@ -32,6 +32,7 @@ beeflow_websocket/
   core/
   django/
   fastapi/
+  flask/
 ```
 
 `core` zawiera elementy niezależne od frameworka:
@@ -50,9 +51,29 @@ beeflow_websocket/
 - generowanie backendowego `msg_id`
 - licznik `seq` dla połączenia WebSocket
 
-`fastapi` jest przestrzenią nazw przygotowaną pod integrację z FastAPI.
+`fastapi` zawiera integrację z FastAPI:
 
-Moduły w `core` nie importują Django, Channels ani FastAPI. Kod domenowy powinien importować kontrakty i rejestry z `beeflow_websocket.core`.
+- handler endpointu WebSocket
+- helper konfiguracji aplikacji zapisujący ustawienia w `app.state`
+- emitter wysyłający zdarzenia przez bieżące połączenie WebSocket
+- generowanie backendowego `msg_id`
+- licznik `seq` dla połączenia WebSocket
+
+Adapter FastAPI obsługuje bezpośrednie odpowiedzi na bieżącym połączeniu WebSocket. Broadcast między połączeniami
+albo zewnętrzny pub/sub powinien być osobnym managerem połączeń.
+
+`flask` zawiera integrację z Flask-Sock:
+
+- handler endpointu WebSocket
+- helper konfiguracji aplikacji zapisujący ustawienia w `app.config`
+- emitter wysyłający zdarzenia przez bieżące połączenie WebSocket
+- generowanie backendowego `msg_id`
+- licznik `seq` dla połączenia WebSocket
+
+Adapter Flask obsługuje bezpośrednie odpowiedzi na bieżącym połączeniu WebSocket. Broadcast między połączeniami albo
+zewnętrzny pub/sub powinien być osobnym managerem połączeń.
+
+Moduły w `core` nie importują Django, Channels, FastAPI ani Flask. Kod domenowy powinien importować kontrakty i rejestry z `beeflow_websocket.core`.
 Kolejne adaptery powinny leżeć obok `django`, bez importowania kodu frameworków do `core`.
 
 ## Kontrakt Wejściowy
