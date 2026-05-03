@@ -9,13 +9,8 @@ from django.test import SimpleTestCase, override_settings
 from beeflow_websocket.core.action_registry import ActionContext, ActionRegistryMeta
 from beeflow_websocket.core.event_registry import EventRegistryMeta
 from beeflow_websocket.core.events.health import HealthEvent
-from beeflow_websocket.core.payloads import (
-    WebSocketActionPayload,
-    WebSocketEventPayload,
-)
-from beeflow_websocket.core.recipient_registry import (
-    RecipientMapDoesNotExist,
-)
+from beeflow_websocket.core.payloads import WebSocketActionPayload, WebSocketEventPayload
+from beeflow_websocket.core.recipient_registry import RecipientMapDoesNotExist
 from beeflow_websocket.django.consumer import WebSocketConsumer
 from beeflow_websocket.django.emitters import WebSocketChannelLayerProtocol, WebSocketEventEmitter
 from beeflow_websocket.django.routing import websocket_urlpatterns
@@ -27,6 +22,7 @@ SERVER_MESSAGE_ID = UUID("33333333-3333-4333-8333-333333333333")
 INVALID_MESSAGE_DETAIL = (
     "Message must contain valid UUID 'msg_id' and 'req_id', a non-empty 'action' string, and an object 'payload'."
 )
+PROBLEM_TYPE_BASE_URL = "https://example.com/problems/websocket"
 
 
 class MultipleHealthAction(metaclass=ActionRegistryMeta, name="multiple_health"):
@@ -215,7 +211,10 @@ class WebSocketEventEmitterTests(SimpleTestCase):
             ).emit(MissingRecipientEvent())
 
 
-@override_settings(CHANNEL_LAYERS=TEST_CHANNEL_LAYERS)
+@override_settings(
+    BEEFLOW_WEBSOCKET_PROBLEM_TYPE_BASE_URL=PROBLEM_TYPE_BASE_URL,
+    CHANNEL_LAYERS=TEST_CHANNEL_LAYERS,
+)
 class WebSocketConsumerTests(SimpleTestCase):
     """Verify clean async WebSocket consumer dispatch."""
 
@@ -286,7 +285,7 @@ class WebSocketConsumerTests(SimpleTestCase):
             {key: response[key] for key in ("req_id", "type", "title", "status", "detail", "code", "instance")},
             {
                 "req_id": str(REQUEST_ID),
-                "type": "https://beeflow.co.uk/problems/beeflow-websocket/unknown-action",
+                "type": f"{PROBLEM_TYPE_BASE_URL}/unknown-action",
                 "title": "Unknown WebSocket action",
                 "status": 400,
                 "detail": "No WebSocket action is registered under 'missing_action'.",
@@ -298,7 +297,9 @@ class WebSocketConsumerTests(SimpleTestCase):
     async def test_dispatch_action_emits_problem_details_for_unknown_action(self) -> None:
         """Action dispatch emits a debuggable Problem Details payload when no action exists."""
         consumer = RecordingWebSocketConsumer()
-        message = WebSocketActionPayload(msg_id=CLIENT_MESSAGE_ID, req_id=REQUEST_ID, action="missing_action", payload={})
+        message = WebSocketActionPayload(
+            msg_id=CLIENT_MESSAGE_ID, req_id=REQUEST_ID, action="missing_action", payload={}
+        )
 
         await consumer._dispatch_action(message)
 
@@ -312,7 +313,7 @@ class WebSocketConsumerTests(SimpleTestCase):
             },
             {
                 "req_id": str(REQUEST_ID),
-                "type": "https://beeflow.co.uk/problems/beeflow-websocket/unknown-action",
+                "type": f"{PROBLEM_TYPE_BASE_URL}/unknown-action",
                 "title": "Unknown WebSocket action",
                 "status": 400,
                 "detail": "No WebSocket action is registered under 'missing_action'.",
@@ -334,7 +335,7 @@ class WebSocketConsumerTests(SimpleTestCase):
             {key: response[key] for key in ("req_id", "type", "title", "status", "detail", "code", "instance")},
             {
                 "req_id": str(REQUEST_ID),
-                "type": "https://beeflow.co.uk/problems/beeflow-websocket/invalid-message",
+                "type": f"{PROBLEM_TYPE_BASE_URL}/invalid-message",
                 "title": "Invalid WebSocket message",
                 "status": 400,
                 "detail": INVALID_MESSAGE_DETAIL,
@@ -357,7 +358,7 @@ class WebSocketConsumerTests(SimpleTestCase):
         self.assertEqual(
             {key: response[key] for key in ("type", "title", "status", "detail", "code", "instance")},
             {
-                "type": "https://beeflow.co.uk/problems/beeflow-websocket/invalid-message",
+                "type": f"{PROBLEM_TYPE_BASE_URL}/invalid-message",
                 "title": "Invalid WebSocket message",
                 "status": 400,
                 "detail": INVALID_MESSAGE_DETAIL,

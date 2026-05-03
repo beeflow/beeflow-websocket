@@ -8,15 +8,18 @@ from typing import Protocol, runtime_checkable
 from uuid import UUID, uuid4
 
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
+from django.conf import settings
 from pydantic import ValidationError
 
 from beeflow_websocket.core.action_registry import ActionContext, ActionPluginProtocol, ActionRegistryMeta
 from beeflow_websocket.core.payloads import ErrorPayload, WebSocketActionPayload, WebSocketRequestIdentifier
+from beeflow_websocket.core.problems import INVALID_MESSAGE_PROBLEM, UNKNOWN_ACTION_PROBLEM, build_problem_type
 from beeflow_websocket.django.emitters import WebSocketEventEmitter
 
 INVALID_MESSAGE_DETAIL = (
     "Message must contain valid UUID 'msg_id' and 'req_id', a non-empty 'action' string, and an object 'payload'."
 )
+PROBLEM_TYPE_BASE_URL_SETTING = "BEEFLOW_WEBSOCKET_PROBLEM_TYPE_BASE_URL"
 
 
 @runtime_checkable
@@ -113,7 +116,7 @@ class WebSocketConsumer(AsyncJsonWebsocketConsumer):
         await self._send_problem(
             ErrorPayload(
                 req_id=req_id,
-                type="https://beeflow.co.uk/problems/beeflow-websocket/invalid-message",
+                type=self._problem_type(INVALID_MESSAGE_PROBLEM),
                 title="Invalid WebSocket message",
                 status=400,
                 detail=INVALID_MESSAGE_DETAIL,
@@ -130,7 +133,7 @@ class WebSocketConsumer(AsyncJsonWebsocketConsumer):
         await self._send_problem(
             ErrorPayload(
                 req_id=req_id,
-                type="https://beeflow.co.uk/problems/beeflow-websocket/unknown-action",
+                type=self._problem_type(UNKNOWN_ACTION_PROBLEM),
                 title="Unknown WebSocket action",
                 status=400,
                 detail=f"No WebSocket action is registered under '{action_name}'.",
@@ -160,6 +163,12 @@ class WebSocketConsumer(AsyncJsonWebsocketConsumer):
             return WebSocketRequestIdentifier.model_validate(content).req_id
         except ValidationError:
             return None
+
+    def _problem_type(self, problem_slug: str) -> str:
+        """Return the Problem Details type URI configured by the Django project."""
+        problem_type_base_url = getattr(settings, PROBLEM_TYPE_BASE_URL_SETTING, None)
+
+        return build_problem_type(problem_type_base_url, problem_slug)
 
     def _authenticated_user(self) -> AuthenticatedWebSocketUserProtocol | None:
         """Return the authenticated ASGI user required for action dispatch."""

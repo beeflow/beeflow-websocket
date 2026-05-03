@@ -10,7 +10,7 @@ Przykładowy payload:
 {
   "msg_id": "server-message-uuid",
   "req_id": "client-request-uuid",
-  "type": "https://beeflow.co.uk/problems/beeflow-websocket/unknown-action",
+  "type": "https://example.com/problems/websocket/unknown-action",
   "title": "Unknown WebSocket action",
   "status": 400,
   "detail": "No WebSocket action is registered under 'MissingAction'.",
@@ -24,6 +24,9 @@ jest puste, błąd nie może zostać skorelowany z żądaniem.
 
 Backend generuje nowe `msg_id` dla każdego błędu. Błędy nie mają `seq`.
 
+Pole Problem Details `type` jest budowane z bazowego URL-a problemów należącego do aplikacji. Jeżeli aplikacja go nie
+skonfiguruje, błędy używają `about:blank`.
+
 ## Aktualne Błędy
 
 ### `invalid_websocket_message`
@@ -33,10 +36,10 @@ Emitowany, gdy wiadomość od klienta nie ma poprawnej koperty `WebSocketActionP
 Jeżeli wiadomość zawiera poprawne `req_id`, odpowiedź błędu zwraca to samo `req_id`.
 Jeżeli `req_id` jest puste albo go nie ma, błąd nie zawiera `req_id`.
 
-Problem URL:
+Problem URL przy `https://example.com/problems/websocket` ustawionym jako bazowy URL aplikacji:
 
 ```text
-https://beeflow.co.uk/problems/beeflow-websocket/invalid-message
+https://example.com/problems/websocket/invalid-message
 ```
 
 ### `unknown_websocket_action`
@@ -45,8 +48,8 @@ Emitowany, gdy koperta jest poprawna, ale `ActionRegistryMeta` nie ma klasy zare
 
 Ten błąd zawsze zwraca `req_id`, ponieważ powstaje po poprawnej walidacji koperty akcji.
 
-Problem URL:
+Problem URL przy `https://example.com/problems/websocket` ustawionym jako bazowy URL aplikacji:
 
 ```text
-https://beeflow.co.uk/problems/beeflow-websocket/unknown-action
+https://example.com/problems/websocket/unknown-action
 ```

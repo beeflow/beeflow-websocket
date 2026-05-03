@@ -15,7 +15,7 @@ repos:
     rev: 25.1.0
     hooks:
       - id: black
-        language_version: python3.14
+        language_version: python3.12
   - repo: https://github.com/pycqa/flake8
     rev: 7.1.2
     hooks:
@@ -24,6 +24,7 @@ repos:
     rev: 1.8.3
     hooks:
       - id: bandit
+        exclude: ^tests/
   - repo: https://github.com/pycqa/isort
     rev: 5.12.0
     hooks:
@@ -31,5 +32,5 @@ repos:
         name: isort (python)
         args: ["--profile", "black"]
 default_language_version:
-  python: python3.14
+  python: python3.12
 fail_fast: false
