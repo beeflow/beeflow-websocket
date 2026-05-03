@@ -188,6 +188,13 @@ class AutodiscoverTests(TestCase):
             (),
         )
 
+    def test_available_autodiscover_raises_parent_package_import_errors(self) -> None:
+        """Available-package autodiscovery does not hide real parent package import failures."""
+        with self.assertRaises(ModuleNotFoundError) as context:
+            autodiscover_available_websocket_plugins(("tests.fixtures.broken_autodiscover_app.ws.actions",))
+
+        self.assertEqual(context.exception.name, "tests.fixtures.missing_dependency")
+
     def test_autodiscover_rejects_string_configuration(self) -> None:
         """Package configuration must be an iterable of strings, not one string."""
         with self.assertRaises(TypeError):

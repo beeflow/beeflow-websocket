@@ -2,7 +2,6 @@
 
 from collections.abc import Iterable
 from importlib import import_module
-from importlib.util import find_spec
 from inspect import currentframe
 from pkgutil import walk_packages
 
@@ -55,8 +54,7 @@ def autodiscover_available_websocket_plugins(packages: Iterable[str] | str | Non
     normalized_packages = normalize_autodiscover_packages(packages, setting_name="Autodiscover packages")
 
     for package_name in normalized_packages:
-        if _package_exists(package_name):
-            imported_modules.extend(_import_package_tree(package_name))
+        imported_modules.extend(_import_package_tree_if_available(package_name))
 
     return tuple(imported_modules)
 
@@ -125,8 +123,17 @@ def _import_package_tree(package_name: str) -> list[str]:
     return imported_modules
 
 
-def _package_exists(package_name: str) -> bool:
-    try:
-        return find_spec(package_name) is not None
-    except ModuleNotFoundError:
-        return False
+def _import_package_tree_if_available(package_name: str) -> list[str]:
+    package_parts = tuple(part for part in package_name.split(".") if part)
+
+    for index in range(1, len(package_parts) + 1):
+        candidate_name = ".".join(package_parts[:index])
+        try:
+            import_module(candidate_name)
+        except ModuleNotFoundError as error:
+            if error.name == candidate_name:
+                return []
+
+            raise
+
+    return _import_package_tree(package_name)
