@@ -14,6 +14,7 @@ from pydantic import ValidationError
 from beeflow_websocket.core.action_registry import ActionContext, ActionPluginProtocol, ActionRegistryMeta
 from beeflow_websocket.core.payloads import ErrorPayload, WebSocketActionPayload, WebSocketRequestIdentifier
 from beeflow_websocket.core.problems import INVALID_MESSAGE_PROBLEM, UNKNOWN_ACTION_PROBLEM, build_problem_type
+from beeflow_websocket.django.authentication import selected_authentication_subprotocol
 from beeflow_websocket.django.emitters import WebSocketEventEmitter
 
 INVALID_MESSAGE_DETAIL = (
@@ -57,8 +58,7 @@ class WebSocketConsumer(AsyncJsonWebsocketConsumer):
             await self.close()
             return
 
-        # Connection acceptance stays transport-only because action validation needs the original message payload.
-        await self.accept()
+        await self.accept(selected_authentication_subprotocol(self.scope))
 
     async def receive_json(self, content: object, **kwargs: object) -> None:
         """Validate one inbound JSON message and dispatch it as a client action.

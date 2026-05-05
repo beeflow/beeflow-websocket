@@ -12,6 +12,7 @@ from beeflow_websocket.core.events.health import HealthEvent
 from beeflow_websocket.core.payloads import WebSocketActionPayload, WebSocketEventPayload
 from beeflow_websocket.core.recipient_registry import RecipientMapDoesNotExist
 from beeflow_websocket.django.apps import BeeflowWebsocketDjangoConfig
+from beeflow_websocket.django.authentication import AUTHENTICATION_SUBPROTOCOL, access_token_from_subprotocols
 from beeflow_websocket.django.consumer import WebSocketConsumer
 from beeflow_websocket.django.emitters import WebSocketChannelLayerProtocol, WebSocketEventEmitter
 from beeflow_websocket.django.routing import websocket_urlpatterns
@@ -267,6 +268,45 @@ class WebSocketEventEmitterTests(SimpleTestCase):
 )
 class WebSocketConsumerTests(SimpleTestCase):
     """Verify clean async WebSocket consumer dispatch."""
+
+    def test_access_token_can_be_read_from_websocket_subprotocols(self) -> None:
+        """Django adapter exposes browser-safe access-token extraction outside the URL."""
+        access_token = access_token_from_subprotocols({"subprotocols": [AUTHENTICATION_SUBPROTOCOL, "jwt-token"]})
+
+        self.assertEqual(access_token, "jwt-token")
+
+    def test_access_token_can_be_read_from_iterable_websocket_subprotocols(self) -> None:
+        """Django adapter accepts ASGI subprotocol collections that are not concrete lists."""
+        access_token = access_token_from_subprotocols({"subprotocols": (AUTHENTICATION_SUBPROTOCOL, "jwt-token")})
+
+        self.assertEqual(access_token, "jwt-token")
+
+    def test_access_token_is_empty_without_authentication_marker_subprotocol(self) -> None:
+        """Django adapter does not treat unrelated subprotocols as access tokens."""
+        access_token = access_token_from_subprotocols({"subprotocols": ["chat"]})
+
+        self.assertEqual(access_token, "")
+
+    def test_access_token_is_empty_without_token_after_authentication_marker(self) -> None:
+        """Django adapter requires the token directly after the authentication marker."""
+        access_token = access_token_from_subprotocols({"subprotocols": [AUTHENTICATION_SUBPROTOCOL]})
+
+        self.assertEqual(access_token, "")
+
+    async def test_consumer_selects_access_token_subprotocol_without_echoing_token(self) -> None:
+        """Consumer accepts the auth marker subprotocol without returning the secret token."""
+        communicator = WebsocketCommunicator(
+            URLRouter(websocket_urlpatterns),
+            "/ws/",
+            subprotocols=[AUTHENTICATION_SUBPROTOCOL, "jwt-token"],
+        )
+        communicator.scope["user"] = AuthenticatedWebSocketUser()
+
+        connected, selected_subprotocol = await communicator.connect()
+        await communicator.disconnect()
+
+        self.assertTrue(connected)
+        self.assertEqual(selected_subprotocol, AUTHENTICATION_SUBPROTOCOL)
 
     async def test_consumer_dispatches_registered_health_action(self) -> None:
         """Consumer dispatches an action and emits the yielded event payload."""
