@@ -14,7 +14,7 @@ dependencies = [
 [project.optional-dependencies]
 django = [
     "channels>=4.2,<5",
-    "django>=4.2,<6",
+    "django>=4.2,<7",
 ]
 fastapi = [
     "fastapi>=0.115,<1",
