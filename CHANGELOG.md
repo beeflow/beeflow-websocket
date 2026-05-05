@@ -6,6 +6,17 @@ This project follows Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-05-05
+
+### Added
+
+- Django helper for reading access tokens passed through WebSocket subprotocols.
+
+### Changed
+
+- Django WebSocket consumer now selects only the non-secret authentication marker subprotocol during the handshake,
+  avoiding token echoing in the accepted subprotocol.
+
 ## [0.1.1] - 2026-05-03
 
 ### Added
