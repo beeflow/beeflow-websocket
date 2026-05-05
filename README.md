@@ -159,37 +159,144 @@ imports.
 
 ## Django Channels Setup
 
-Add the package to Django settings when using the adapter:
+Install the optional Django extra:
+
+```bash
+uv add "beeflow-websocket[django]"
+```
+
+Add the package and Channels settings in `settings.py`:
 
 ```python
 INSTALLED_APPS = [
     "channels",
     "beeflow_websocket.django",
+    # ...
 ]
 
+ASGI_APPLICATION = "config.asgi.application"
+
 BEEFLOW_WEBSOCKET_PROBLEM_TYPE_BASE_URL = "https://example.com/problems/websocket"
+
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels.layers.InMemoryChannelLayer",
+    }
+}
 ```
 
 If `BEEFLOW_WEBSOCKET_PROBLEM_TYPE_BASE_URL` is not configured, error payloads use `about:blank` as their Problem
-Details `type`.
-
-Include the bundled WebSocket route in your ASGI routing:
+Details `type`. Use the in-memory channel layer only for local development and single-process testing. For production
+or multi-process delivery, install `channels-redis` and use a Redis channel layer:
 
 ```python
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "CONFIG": {
+            "hosts": [("127.0.0.1", 6379)],
+        },
+    }
+}
+```
+
+WebSocket routing belongs in `asgi.py`, not in `urls.py`. Include the bundled route with Channels auth middleware when
+the project uses standard Django session/cookie authentication:
+
+```python
+import os
+
+from channels.auth import AuthMiddlewareStack
 from channels.routing import ProtocolTypeRouter, URLRouter
+from channels.security.websocket import AllowedHostsOriginValidator
 from django.core.asgi import get_asgi_application
 
 from beeflow_websocket.django.routing import websocket_urlpatterns
 
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
+
+django_asgi_app = get_asgi_application()
+
 application = ProtocolTypeRouter(
     {
-        "http": get_asgi_application(),
-        "websocket": URLRouter(websocket_urlpatterns),
+        "http": django_asgi_app,
+        "websocket": AllowedHostsOriginValidator(
+            AuthMiddlewareStack(
+                URLRouter(websocket_urlpatterns),
+            )
+        ),
     }
 )
 ```
 
-The bundled route is `ws/`. The default consumer accepts only authenticated users.
+The bundled route is `ws/`, so the client connects to `/ws/`. The default consumer accepts only authenticated users.
+`AuthMiddlewareStack` sets `scope["user"]` for standard Django session/cookie authentication.
+
+To use a different path, define your own WebSocket URL patterns and still mount them in `asgi.py`:
+
+```python
+from django.urls import path
+
+from beeflow_websocket.django.consumer import WebSocketConsumer
+
+websocket_urlpatterns = [
+    path("api/ws/", WebSocketConsumer.as_asgi()),
+]
+```
+
+Then mount that local `websocket_urlpatterns` in `URLRouter(...)` instead of importing
+`beeflow_websocket.django.routing.websocket_urlpatterns`.
+
+Do not send access tokens in the WebSocket query string. Query-string tokens can leak through logs, browser history,
+proxy logs, and monitoring tools. If browser clients authenticate with an access token, send the public marker and then
+the secret token as WebSocket subprotocols:
+
+```javascript
+const socket = new WebSocket("wss://example.com/ws/", ["access-token", accessToken]);
+```
+
+Use the bundled `AccessTokenAuthMiddleware` to read that token and populate `scope["user"]`. The library extracts the
+token and selects only the non-secret `access-token` marker during the handshake. The application provides only the
+token validation function because signing keys, JWT claims, user models, and revocation rules are project-owned:
+
+```python
+import os
+
+from channels.routing import ProtocolTypeRouter, URLRouter
+from channels.security.websocket import AllowedHostsOriginValidator
+from django.core.asgi import get_asgi_application
+
+from beeflow_websocket.django.authentication import AccessTokenAuthMiddleware
+from beeflow_websocket.django.routing import websocket_urlpatterns
+
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
+
+django_asgi_app = get_asgi_application()
+
+
+async def get_user_for_access_token(token: str) -> object:
+    """Validate the project access token and return a Django user."""
+    ...
+
+
+application = ProtocolTypeRouter(
+    {
+        "http": django_asgi_app,
+        "websocket": AllowedHostsOriginValidator(
+            AccessTokenAuthMiddleware(
+                URLRouter(websocket_urlpatterns),
+                user_resolver=get_user_for_access_token,
+            )
+        ),
+    }
+)
+```
+
+`AccessTokenAuthMiddleware` accepts sync and async resolvers. Synchronous resolvers run through Channels
+`database_sync_to_async`, so regular Django ORM lookups do not run on the ASGI event loop. The resolver must return an
+object compatible with the consumer contract: `user.is_authenticated` must be true and `user.id` must contain the
+application user id. When the client does not send an access token, the middleware sets an anonymous user and the
+default consumer closes the connection.
 
 ## FastAPI Setup
 
@@ -199,10 +306,11 @@ Install the optional FastAPI extra:
 uv add "beeflow-websocket[fastapi]"
 ```
 
-Add a WebSocket route and pass the authenticated user id from your own FastAPI dependency:
+FastAPI routing stays in the application. Configure the adapter once, add a WebSocket route, authenticate the
+connection in your own dependency, and pass the authenticated user id to the handler:
 
 ```python
-from fastapi import FastAPI, WebSocket
+from fastapi import Depends, FastAPI, WebSocket
 
 from beeflow_websocket.fastapi import configure_beeflow_websocket, handle_beeflow_websocket
 
@@ -213,14 +321,23 @@ configure_beeflow_websocket(
 )
 
 
+async def get_current_user_id(websocket: WebSocket) -> int:
+    """Authenticate the WebSocket connection and return the project user id."""
+    ...
+
+
 @app.websocket("/ws/")
-async def websocket_endpoint(websocket: WebSocket) -> None:
-    await handle_beeflow_websocket(websocket, user_id=1)
+async def websocket_endpoint(websocket: WebSocket, user_id: int = Depends(get_current_user_id)) -> None:
+    await handle_beeflow_websocket(websocket, user_id=user_id)
 ```
 
-The FastAPI adapter handles the current WebSocket connection directly. Cross-connection broadcast or external pub/sub belongs in a separate connection manager.
+The route path is fully controlled by the application. Use `@app.websocket("/api/ws/")` or any other path when the
+project does not want `/ws/`. The FastAPI adapter handles the current WebSocket connection directly and accepts it
+inside `handle_beeflow_websocket`. Cross-connection broadcast, connection registries, and external pub/sub belong in
+the application layer.
+
 If the FastAPI app is not configured with a problem type base URL, error payloads use `about:blank` as their Problem
-Details `type`.
+Details `type`. Run the app with the ASGI server already used by the project, for example `uvicorn my_app.main:app`.
 
 ## Flask Setup
 
@@ -230,10 +347,11 @@ Install the optional Flask extra:
 uv add "beeflow-websocket[flask]"
 ```
 
-Add a `Flask-Sock` WebSocket route and pass the authenticated user id from your own Flask auth layer:
+Flask routing stays in the application. Configure the adapter once, add a `Flask-Sock` WebSocket route, authenticate the
+connection in your own Flask auth layer, and pass the authenticated user id to the handler:
 
 ```python
-from flask import Flask
+from flask import Flask, g
 from flask_sock import Sock
 
 from beeflow_websocket.flask import configure_beeflow_websocket, handle_beeflow_websocket
@@ -248,12 +366,18 @@ configure_beeflow_websocket(
 
 @sock.route("/ws/")
 def websocket_endpoint(websocket) -> None:
-    handle_beeflow_websocket(websocket, user_id=1)
+    user_id = g.user.id
+
+    handle_beeflow_websocket(websocket, user_id=user_id)
 ```
 
-The Flask adapter handles the current WebSocket connection directly. Cross-connection broadcast or external pub/sub
-belongs in a separate connection manager. If the Flask app is not configured with a problem type base URL, error
-payloads use `about:blank` as their Problem Details `type`.
+The route path is fully controlled by the application. Use `@sock.route("/api/ws/")` or any other path when the project
+does not want `/ws/`. The Flask adapter handles the current WebSocket connection directly. Cross-connection broadcast,
+connection registries, and external pub/sub belong in the application layer.
+
+If the Flask app is not configured with a problem type base URL, error payloads use `about:blank` as their Problem
+Details `type`. Use the production server already chosen by the Flask project and make sure it supports WebSocket
+traffic for `Flask-Sock`.
 
 ## Documentation
 

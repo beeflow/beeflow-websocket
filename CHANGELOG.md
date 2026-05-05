@@ -6,6 +6,17 @@ This project follows Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-05-05
+
+### Added
+
+- Reusable Django `AccessTokenAuthMiddleware` for authenticating WebSocket access tokens sent through subprotocols.
+  Synchronous resolvers run off the ASGI event loop.
+
+### Changed
+
+- Expanded README setup instructions for Django Channels, FastAPI, and Flask routing and authentication integration.
+
 ## [0.2.0] - 2026-05-05
 
 ### Added

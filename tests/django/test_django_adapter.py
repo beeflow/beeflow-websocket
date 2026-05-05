@@ -1,5 +1,6 @@
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from importlib import import_module, reload
+from threading import get_ident
 from uuid import UUID
 
 from channels.routing import URLRouter
@@ -12,7 +13,11 @@ from beeflow_websocket.core.events.health import HealthEvent
 from beeflow_websocket.core.payloads import WebSocketActionPayload, WebSocketEventPayload
 from beeflow_websocket.core.recipient_registry import RecipientMapDoesNotExist
 from beeflow_websocket.django.apps import BeeflowWebsocketDjangoConfig
-from beeflow_websocket.django.authentication import AUTHENTICATION_SUBPROTOCOL, access_token_from_subprotocols
+from beeflow_websocket.django.authentication import (
+    AUTHENTICATION_SUBPROTOCOL,
+    AccessTokenAuthMiddleware,
+    access_token_from_subprotocols,
+)
 from beeflow_websocket.django.consumer import WebSocketConsumer
 from beeflow_websocket.django.emitters import WebSocketChannelLayerProtocol, WebSocketEventEmitter
 from beeflow_websocket.django.routing import websocket_urlpatterns
@@ -118,6 +123,31 @@ class AnonymousWebSocketUser:
     """Represent an anonymous ASGI user in WebSocket consumer tests."""
 
     is_authenticated = False
+
+
+class RecordingASGIApplication:
+    """Record the final ASGI scope passed through authentication middleware."""
+
+    def __init__(self) -> None:
+        self.scope: dict[str, object] = {}
+
+    async def __call__(
+        self,
+        scope: dict[str, object],
+        receive: Callable[[], Awaitable[dict[str, object]]],
+        send: Callable[[dict[str, object]], Awaitable[None]],
+    ) -> None:
+        self.scope = scope
+
+
+async def empty_asgi_receive() -> dict[str, object]:
+    """Return an empty ASGI event for middleware tests."""
+    return {}
+
+
+async def empty_asgi_send(message: dict[str, object]) -> None:
+    """Accept an ASGI event for middleware tests."""
+    return None
 
 
 def authenticated_websocket_communicator() -> WebsocketCommunicator:
@@ -292,6 +322,59 @@ class WebSocketConsumerTests(SimpleTestCase):
         access_token = access_token_from_subprotocols({"subprotocols": [AUTHENTICATION_SUBPROTOCOL]})
 
         self.assertEqual(access_token, "")
+
+    async def test_access_token_auth_middleware_sets_resolved_scope_user(self) -> None:
+        """Django adapter provides middleware that authenticates subprotocol access tokens."""
+        app = RecordingASGIApplication()
+
+        async def resolve_user(token: str) -> object:
+            self.assertEqual(token, "jwt-token")
+
+            return AuthenticatedWebSocketUser()
+
+        middleware = AccessTokenAuthMiddleware(app, resolve_user)
+
+        await middleware(
+            {"subprotocols": [AUTHENTICATION_SUBPROTOCOL, "jwt-token"]},
+            empty_asgi_receive,
+            empty_asgi_send,
+        )
+
+        self.assertIsInstance(app.scope["user"], AuthenticatedWebSocketUser)
+
+    async def test_access_token_auth_middleware_runs_sync_resolver_off_event_loop(self) -> None:
+        """Django adapter keeps synchronous token resolvers out of the ASGI event loop."""
+        app = RecordingASGIApplication()
+        event_loop_thread_id = get_ident()
+
+        def resolve_user(token: str) -> object:
+            self.assertEqual(token, "jwt-token")
+            self.assertNotEqual(get_ident(), event_loop_thread_id)
+
+            return AuthenticatedWebSocketUser()
+
+        middleware = AccessTokenAuthMiddleware(app, resolve_user)
+
+        await middleware(
+            {"subprotocols": [AUTHENTICATION_SUBPROTOCOL, "jwt-token"]},
+            empty_asgi_receive,
+            empty_asgi_send,
+        )
+
+        self.assertIsInstance(app.scope["user"], AuthenticatedWebSocketUser)
+
+    async def test_access_token_auth_middleware_sets_anonymous_user_without_token(self) -> None:
+        """Django adapter leaves unauthenticated connections anonymous when no token is sent."""
+        app = RecordingASGIApplication()
+
+        def resolve_user(token: str) -> object:
+            self.fail("Resolver should not run without an access token.")
+
+        middleware = AccessTokenAuthMiddleware(app, resolve_user)
+
+        await middleware({"subprotocols": []}, empty_asgi_receive, empty_asgi_send)
+
+        self.assertFalse(app.scope["user"].is_authenticated)
 
     async def test_consumer_selects_access_token_subprotocol_without_echoing_token(self) -> None:
         """Consumer accepts the auth marker subprotocol without returning the secret token."""
